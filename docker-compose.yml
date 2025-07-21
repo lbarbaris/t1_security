@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    container_name: security_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: security
+      POSTGRES_PASSWORD: supersecretpassword
+      POSTGRES_DB: securitydb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  myapp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: myapp_container
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://security_postgres:5432/securitydb
+      SPRING_DATASOURCE_USERNAME: security
+      SPRING_DATASOURCE_PASSWORD: supersecretpassword
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update  # если используешь JPA
+    restart: always
+
+volumes:
+  pgdata:
