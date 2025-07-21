@@ -27,7 +27,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://security_postgres:5432/securitydb
       SPRING_DATASOURCE_USERNAME: security
       SPRING_DATASOURCE_PASSWORD: supersecretpassword
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update  # если используешь JPA
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
     restart: always
 
 volumes:
