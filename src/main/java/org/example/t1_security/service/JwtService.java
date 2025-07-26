@@ -1,18 +1,24 @@
 package org.example.t1_security.service;
 
+import com.nimbusds.jose.*;
+import com.nimbusds.jose.crypto.DirectDecrypter;
+import com.nimbusds.jose.crypto.DirectEncrypter;
+import com.nimbusds.jwt.EncryptedJWT;
+import com.nimbusds.jwt.JWTClaimsSet;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.t1_security.model.User;
-import io.jsonwebtoken.*;
-import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
-import java.security.Key;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 import java.util.Date;
+import java.util.List;
 import java.util.function.Function;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class JwtService {
@@ -26,68 +32,69 @@ public class JwtService {
     @Value("${jwt.refresh-expiration}")
     private long refreshExpiration;
 
-    private Key key;
+    private SecretKey secretKey;
 
     @PostConstruct
     public void init() {
-        this.key = Keys.hmacShaKeyFor(secret.getBytes());
+        this.secretKey = new SecretKeySpec(secret.getBytes(), "AES");
     }
 
     public String generateAccessToken(User user) {
-        return Jwts.builder()
-                .setSubject(user.getUsername())
-                .claim("roles", user.getRoles().stream().map(r -> r.getName().name()).toList())
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + jwtExpiration))
-                .signWith(key, SignatureAlgorithm.HS256)
-                .compact();
+        return generateToken(user, jwtExpiration);
     }
 
     public String generateRefreshToken(User user) {
-        return Jwts.builder()
-                .setSubject(user.getUsername())
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + refreshExpiration))
-                .signWith(key, SignatureAlgorithm.HS256)
-                .compact();
+        return generateToken(user, refreshExpiration);
     }
 
-    public String getUsername(String token) {
-        return Jwts.parserBuilder().setSigningKey(key).build()
-                .parseClaimsJws(token).getBody().getSubject();
+    private String generateToken(User user, long expirationTimeMillis) {
+        try {
+            var claimsSet = new JWTClaimsSet.Builder()
+                    .subject(user.getUsername())
+                    .claim("roles", user.getRoles().stream().map(r -> r.getName().name()).toList())
+                    .issueTime(new Date())
+                    .expirationTime(new Date(System.currentTimeMillis() + expirationTimeMillis))
+                    .build();
+
+            var header = new JWEHeader(JWEAlgorithm.DIR, EncryptionMethod.A256GCM);
+            var jwt = new EncryptedJWT(header, claimsSet);
+
+            var encrypter = new DirectEncrypter(secretKey);
+            jwt.encrypt(encrypter);
+
+            log.info("Generated JWT: {}", jwt.serialize());
+
+            return jwt.serialize();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to generate token", e);
+        }
     }
 
     public String extractUsername(String token) {
-        return extractClaim(token, Claims::getSubject);
-    }
-
-    public <T> T extractClaim(String token, Function<Claims, T> resolver) {
-        final Claims claims = extractAllClaims(token);
-        return resolver.apply(claims);
-    }
-
-    private Claims extractAllClaims(String token) {
-        return Jwts
-                .parserBuilder()
-                .setSigningKey(getSigningKey())
-                .build()
-                .parseClaimsJws(token)
-                .getBody();
-    }
-
-    private Key getSigningKey() {
-        return Keys.hmacShaKeyFor(secret.getBytes());
+        return extractClaim(token, JWTClaimsSet::getSubject);
     }
 
     public boolean isTokenValid(String token, User user) {
-        final String username = getUsername(token);
-        return username.equals(user.getUsername()) && !isTokenExpired(token);
+        try {
+            var username = extractUsername(token);
+            return username.equals(user.getUsername()) && !isTokenExpired(token);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private boolean isTokenExpired(String token) {
-        return Jwts.parserBuilder().setSigningKey(key).build()
-                .parseClaimsJws(token).getBody().getExpiration()
-                .before(new Date());
+        return extractClaim(token, JWTClaimsSet::getExpirationTime).before(new Date());
+    }
+
+    private <T> T extractClaim(String token, Function<JWTClaimsSet, T> resolver) {
+        try {
+            var jwt = EncryptedJWT.parse(token);
+            jwt.decrypt(new DirectDecrypter(secretKey));
+            var claims = jwt.getJWTClaimsSet();
+            return resolver.apply(claims);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to extract claim", e);
+        }
     }
 }
-

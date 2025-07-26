@@ -101,7 +101,7 @@ public class AuthService {
             throw new RuntimeException("Invalid token");
         }
 
-        String token = authHeader.substring(7);
+        var token = authHeader.substring(7);
 
         var storedToken = tokenRepository.findByToken(token)
                 .orElseThrow(() -> new RuntimeException("Token not found"));

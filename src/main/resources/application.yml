@@ -20,7 +20,7 @@ spring:
       schema-locations: classpath:schema.sql
 
 jwt:
-  secret: MEECAQAwEwYHKoZIzj0CAQYIKoZIzj0DAQcEJzAlAgEBBCBh3+ToDdTAkVCP83FpmiHsIe0j6a6WRtYgHES9atxsCw==
+  secret: a2sv83h4nd7w1t8blf93zv8c7s3q1x2d
   expiration: 900000
   refresh-expiration: 604800000
 
