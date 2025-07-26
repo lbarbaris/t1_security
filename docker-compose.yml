@@ -18,7 +18,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: myapp_container
+    container_name: advanced_container
     ports:
       - "8080:8080"
     depends_on:
